@@ -1,0 +1,3 @@
+# alle .pcd Dateien ignorieren
+*.pcd
+input_data/*
