@@ -738,8 +738,9 @@ void dlio::OdomNode::initializeInputTarget() {
 }
 
 void dlio::OdomNode::setInputSource() {
-  this->gicp.setInputSource(this->current_scan);
-  this->gicp.calculateSourceCovariances();
+  this->gicp.setInputSource(this->current_scan);    // Only use retrieved() if cloud has normals --> If/Else logic
+  //this->gicp.calculateSourceCovariances();          // Overwrite with own function (.cc)
+  this->gicp.retrieveSourceCovariancesFromROSMsg(); // If the RosBag has not  normals saved, fallback to standard GICP is implemented
 }
 
 void dlio::OdomNode::initializeDLIO() {

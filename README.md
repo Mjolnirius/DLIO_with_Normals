@@ -134,3 +134,94 @@ This work is licensed under the terms of the MIT license.
 <p align='center'>
     <img src="./doc/img/trees.png" alt="drawing" width="720"/>
 </p>
+
+
+
+
+## Generate map using DLIO
+Terminal 1 (Replace topics according to RosBag):
+```
+# veraltete venv
+cd /home/thor_unix_2204/dlio_ws
+source ~/dlio_venv/bin/activate
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+```
+```
+cd /home/thor_unix_2204/dlio_ws
+source ~/dlio_venv_310/bin/activate
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+```
+```
+# example
+ros2 launch direct_lidar_inertial_odometry dlio.launch.py   rviz:=true   pointcloud_topic:=/robot/lidar   imu_topic:=/robot/imu #REPLACE TOPICS
+```
+```
+# Original quadhard and Lisu (not Lisu-Dfliom)
+ros2 launch direct\_lidar\_inertial\_odometry dlio.launch.py   rviz:=true   pointcloud\_topic:=/os\_cloud\_node/points   imu\_topic:=/os\_cloud\_node/imu
+```
+```
+# DFLIOM quadhard
+ros2 launch direct\_lidar\_inertial\_odometry dlio.launch.py   rviz:=true   pointcloud\_topic:=/compressed\_cloud   imu\_topic:=/os\_cloud\_node/imu
+```
+
+Terminal 2:
+```
+# veraltete venv
+source ~/dlio_venv/bin/activate
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+```
+```
+source ~/dlio_venv_310/bin/activate
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+```
+```
+# example
+ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dlio_spinning/aggressive_spinning_ros2
+```
+```
+# Original quadhard
+ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard_full
+```
+```
+# DFLIOM quadhard
+ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard_full/quadhard_dfliom_V24.db3
+```
+```
+# LiSu quadhard
+ros2 bag play /home/thor_unix_2204/lisu_ws/src/LiSu/input_data/dataset_quadhard/output_lisu/quadhard_LiSu_V1
+```
+
+\
+Extract Trajectory:
+```
+```
+
+```
+cd /home/thor_unix_2204/dlio_ws
+source ~/dlio_venv_310/bin/activate
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+
+cd ~/dlio_ws/scripts
+
+python record_pose_to_tum.py
+```
+
+```
+# Original quadhard
+ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard_full --clock
+```
+\
+Other ROS commands:
+```
+ros2 topic echo /robot/lidar
+
+head -n 50 dlio_estimate.tum
+```

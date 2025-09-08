@@ -50,6 +50,9 @@ std::string to_string_with_precision(const T a_value, const int n = 6)
 // DLIO
 #include <nano_gicp/nano_gicp.h>
 
+// NEU: für Normalen-Makro
+#include <pcl/point_types.h>
+
 namespace dlio {
   enum class SensorType { OUSTER, VELODYNE, HESAI, LIVOX, UNKNOWN };
 
@@ -57,27 +60,38 @@ namespace dlio {
   class MapNode;
 
   struct Point {
-    Point(): data{0.f, 0.f, 0.f, 1.f} {}
+    Point() : data{0.f, 0.f, 0.f, 1.f}, intensity(0.f), curvature(0.f) {}
 
-    PCL_ADD_POINT4D;
-    float intensity; // intensity
+    PCL_ADD_POINT4D;      // x,y,z, w (Padding)
+    PCL_ADD_NORMAL4D;     // normal_x, normal_y, normal_z, normal_w (Padding)
+
+    float curvature;      // added
+    float intensity;
+
     union {
-    std::uint32_t t;   // (Ouster) time since beginning of scan in nanoseconds
-    float time;        // (Velodyne) time since beginning of scan in seconds
-    double timestamp;  // (Hesai) absolute timestamp in seconds
-                       // (Livox) absolute timestamp in (seconds * 10e9)
+      std::uint32_t t;            // (Ouster) ns seit Scan-Beginn
+      float         time;         // (Velodyne) s seit Scan-Beginn
+      double        timestamp;    // (Hesai/Livox) absolute Zeit
     };
+
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   } EIGEN_ALIGN16;
 }
 
+
 POINT_CLOUD_REGISTER_POINT_STRUCT(dlio::Point,
-                                 (float, x, x)
-                                 (float, y, y)
-                                 (float, z, z)
-                                 (float, intensity, intensity)
-                                 (std::uint32_t, t, t)
-                                 (float, time, time)
-                                 (double, timestamp, timestamp))
+  (float, x, x)
+  (float, y, y)
+  (float, z, z)
+  (float, normal_x, normal_x)   // added
+  (float, normal_y, normal_y)   // added
+  (float, normal_z, normal_z)   // added
+  (float, curvature, curvature) // added
+  (float, intensity, intensity) 
+  (std::uint32_t, t, t)
+  (float, time, time)
+  (double, timestamp, timestamp)
+)
 
 typedef dlio::Point PointType;
+

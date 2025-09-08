@@ -101,6 +101,11 @@ public:
   virtual void registerInputSource(const PointCloudSourceConstPtr& cloud);
   virtual void registerInputTarget(const PointCloudTargetConstPtr& cloud);
 
+
+  virtual bool retrieveSourceCovariancesFromROSMsg();     // retrieve source covariances from ROS message (if applicable)
+  void debugDumpSourceCloudOnce_();                       // debug dump of source cloud to PCD file (once)  
+  bool calculateCovariancesFromLiSuNormals();
+  
   virtual bool calculateSourceCovariances();
   virtual bool calculateTargetCovariances();
 
