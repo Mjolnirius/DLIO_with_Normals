@@ -199,7 +199,7 @@ bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg() {
       pcl::traits::has_field<T, pcl::fields::normal_y>::value &&
       pcl::traits::has_field<T, pcl::fields::normal_z>::value;
 
-  bool force_standard_covariance_calculation_ = false; // for testing
+  bool force_standard_covariance_calculation_ = true; // for testing
 
   if (has_normals && !force_standard_covariance_calculation_) {
     return calculateCovariancesFromLiSuNormals();
@@ -228,11 +228,11 @@ bool NanoGICP<PointSource, PointTarget>::calculateCovariancesFromLiSuNormals() {
 
 
   // ---- Parameter (update later - tuning) ----
-  const double s   = 0.05;   // charakteristischer Längenscale [m], z.B. Voxelgröße
-  const double r   = 0.15;   // Anisotropie: sigma_n / sigma_t  (normal schmaler)
-  const double st2 = s * s;
-  const double sn2 = (r * s) * (r * s);
-  const double eps = 1e-8;   //  Regularisierung für Invertierbarkeit
+  const double s   = 0.05;    // charakteristischer Längenscale [m], z.B. Voxelgröße
+  const double r   = 0.15;    // Anisotropie: sigma_n / sigma_t  (normal schmaler)
+  const double st2 = 1;       //s * s;
+  const double sn2 = 1e3;     //(r * s) * (r * s);
+  const double eps = 1e-8;    //  Regularisierung für Invertierbarkeit
 
   const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
 
@@ -329,6 +329,7 @@ void NanoGICP<PointSource, PointTarget>::debugDumpSourceCloudOnce_() {
     std::cerr << "    p0.curvature = " << p0.curvature << "\n";
   }
 
+  /* // show first non-zero point - it's the same as p0 
   for (std::size_t i = 0; i < input_->size(); ++i) {
     const auto& pt = input_->points[i];
     const double norm = std::sqrt(pt.x*pt.x + pt.y*pt.y + pt.z*pt.z);
@@ -349,7 +350,7 @@ void NanoGICP<PointSource, PointTarget>::debugDumpSourceCloudOnce_() {
       }
       break;
     }
-  }
+  }*/
 }
 
 

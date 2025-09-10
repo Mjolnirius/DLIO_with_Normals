@@ -532,6 +532,81 @@ void dlio::OdomNode::getScanFromROS(const sensor_msgs::msg::PointCloud2::SharedP
 
 }
 
+// -----------------------------------------------------------------------------------------
+// --- Non-averaging voxel filter: keep point closest to voxel center ---
+#include <pcl/common/common.h>   // pcl::getMinMax3D
+#include <pcl/common/io.h>       // pcl::isFinite
+#include <unordered_map>
+#include <cmath>
+
+namespace {
+struct VoxelKey {
+  int ix, iy, iz;
+  bool operator==(const VoxelKey& o) const { return ix==o.ix && iy==o.iy && iz==o.iz; }
+};
+struct VoxelKeyHash {
+  std::size_t operator()(const VoxelKey& k) const noexcept {
+    // 64-bit mix — decent spread for large grids
+    uint64_t x = static_cast<uint32_t>(k.ix);
+    uint64_t y = static_cast<uint32_t>(k.iy);
+    uint64_t z = static_cast<uint32_t>(k.iz);
+    uint64_t h = x * 0x9E3779B185EBCA87ULL;
+    h ^= y + 0x9E3779B185EBCA87ULL + (h<<6) + (h>>2);
+    h ^= z + 0x9E3779B185EBCA87ULL + (h<<6) + (h>>2);
+    return static_cast<std::size_t>(h);
+  }
+};
+} // namespace
+
+template <typename PointT>
+void voxelKeepClosestToCenter(const typename pcl::PointCloud<PointT>::ConstPtr& in,
+                              typename pcl::PointCloud<PointT>::Ptr& out,
+                              float leaf_x, float leaf_y, float leaf_z)
+{
+  out.reset(new pcl::PointCloud<PointT>());
+  if (!in || in->empty()) return;
+
+  // Align grid origin like PCL::VoxelGrid does
+  PointT min_pt, max_pt;
+  pcl::getMinMax3D(*in, min_pt, max_pt);
+  const float min_x = std::floor(min_pt.x / leaf_x) * leaf_x;
+  const float min_y = std::floor(min_pt.y / leaf_y) * leaf_y;
+  const float min_z = std::floor(min_pt.z / leaf_z) * leaf_z;
+
+  struct Winner { int idx; float d2; };
+  std::unordered_map<VoxelKey, Winner, VoxelKeyHash> best;
+  best.reserve(in->size() / 8);
+
+  for (int i = 0; i < static_cast<int>(in->size()); ++i) {
+    const PointT& p = (*in)[i];
+    if (!pcl::isFinite(p)) continue;
+
+    const int ix = static_cast<int>(std::floor((p.x - min_x) / leaf_x));
+    const int iy = static_cast<int>(std::floor((p.y - min_y) / leaf_y));
+    const int iz = static_cast<int>(std::floor((p.z - min_z) / leaf_z));
+
+    const float cx = min_x + (ix + 0.5f) * leaf_x;
+    const float cy = min_y + (iy + 0.5f) * leaf_y;
+    const float cz = min_z + (iz + 0.5f) * leaf_z;
+
+    const float dx = p.x - cx, dy = p.y - cy, dz = p.z - cz;
+    const float d2 = dx*dx + dy*dy + dz*dz;
+
+    VoxelKey key{ix, iy, iz};
+    auto it = best.find(key);
+    if (it == best.end() || d2 < it->second.d2) best[key] = Winner{i, d2};
+  }
+
+  out->points.reserve(best.size());
+  for (const auto& kv : best) out->points.push_back((*in)[kv.second.idx]);
+  out->width = static_cast<uint32_t>(out->points.size());
+  out->height = 1;
+  out->is_dense = false;
+}
+// --- end helper ---
+
+// -----------------------------------------------------------------------------------------
+
 void dlio::OdomNode::preprocessPoints() {
 
   // Deskew the original dlio-type scan
@@ -579,15 +654,62 @@ void dlio::OdomNode::preprocessPoints() {
     this->deskew_status = false;
   }
 
-  // Voxel Grid Filter
-  if (this->vf_use_) {
-    pcl::PointCloud<PointType>::Ptr current_scan_ = std::make_shared<pcl::PointCloud<PointType>>(*this->deskewed_scan);
-    this->voxel.setInputCloud(current_scan_);
-    this->voxel.filter(*current_scan_);
-    this->current_scan = current_scan_;
+  // -- Voxel Grid Filter --
+  bool force_no_vf   = false;
+  bool use_custom_vf = true;
+
+  if (this->vf_use_ && !force_no_vf) {
+    if (use_custom_vf) {
+      printf("Using Non-Averaging Voxel Grid Filter (keep closest-to-center)\n");
+
+      //auto leaf = this->voxel.getLeafSize();   // meist Eigen::Vector3f
+      //float lx = leaf[0];   // should be this->vf_res_
+      //float ly = leaf[1];
+      //float lz = leaf[2];
+
+      float lx = this->vf_res_;   
+      float ly = this->vf_res_;
+      float lz = this->vf_res_;
+
+      pcl::PointCloud<PointType>::Ptr down(new pcl::PointCloud<PointType>);
+      voxelKeepClosestToCenter<PointType>(this->deskewed_scan, down, lx, ly, lz);
+      this->current_scan = down;
+
+    } else {
+      printf("Using PCL Voxel Grid Filter (centroid averaging)\n");
+      
+      pcl::PointCloud<PointType>::Ptr current_scan_ =
+          std::make_shared<pcl::PointCloud<PointType>>(*this->deskewed_scan);
+      this->voxel.setInputCloud(current_scan_);
+      this->voxel.filter(*current_scan_);
+      this->current_scan = current_scan_;
+    }
   } else {
+    printf("Skipping Voxel Grid Filter completely\n");
     this->current_scan = this->deskewed_scan;
   }
+
+
+  /*
+  // Voxel Grid Filter
+  printf("vf_use_ is set to %d\n", this->vf_use_);
+  bool force_no_vf = false;
+  bool use_custom_vf = true;
+  if (this->vf_use_ && !force_no_vf) {
+    if {use_custom_vf}{
+      printf("Using Non-Averaging Voxel Grid Filter\n");
+    } else{
+      printf("Using PCL Voxel Grid Filter\n");
+      pcl::PointCloud<PointType>::Ptr current_scan_ = std::make_shared<pcl::PointCloud<PointType>>(*this->deskewed_scan);
+      this->voxel.setInputCloud(current_scan_);
+      this->voxel.filter(*current_scan_);
+      this->current_scan = current_scan_;
+    }
+  } else {
+    printf("Skipping Voxel Grid Filter completely\n");
+    this->current_scan = this->deskewed_scan;
+  }
+    */
 
 }
 

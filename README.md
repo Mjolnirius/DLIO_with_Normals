@@ -139,6 +139,10 @@ This work is licensed under the terms of the MIT license.
 
 
 ## Generate map using DLIO
+Quickbuild:
+```
+colcon build --packages-select direct_lidar_inertial_odometry
+```
 Terminal 1 (Replace topics according to RosBag):
 ```
 # veraltete venv
