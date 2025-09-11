@@ -48,6 +48,16 @@
 #include <typeinfo>
 #include <pcl/point_traits.h>   // pcl::traits::has_field
 
+#include <execinfo.h>
+static inline void print_bt() {
+  void* buf[64];
+  int n = backtrace(buf, 64);
+  char** syms = backtrace_symbols(buf, n);
+  for (int i = 0; i < n; ++i) std::cerr << syms[i] << "\n";
+  free(syms);
+}
+
+
 template class nano_gicp::NanoGICP<PointType, PointType>;
 
 namespace nano_gicp {
@@ -199,7 +209,7 @@ bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg() {
       pcl::traits::has_field<T, pcl::fields::normal_y>::value &&
       pcl::traits::has_field<T, pcl::fields::normal_z>::value;
 
-  bool force_standard_covariance_calculation_ = true; // for testing
+  bool force_standard_covariance_calculation_ = false; // for testing
 
   if (has_normals && !force_standard_covariance_calculation_) {
     return calculateCovariancesFromLiSuNormals();
@@ -378,14 +388,18 @@ bool NanoGICP<PointSource, PointTarget>::calculateTargetCovariances() {
   return ret;
 }
 
-// Never used in DLIO.
+// Used in DLIO.
 template <typename PointSource, typename PointTarget>
 void NanoGICP<PointSource, PointTarget>::computeTransformation(PointCloudSource& output, const Matrix4& guess) {
-  /*std::cout << "[NanoGICP] source_covs_ ptr=" << (void*)source_covs_.get()
+  std::cout << "[NanoGICP] source_covs_ ptr=" << (void*)source_covs_.get()
             << " size=" << (source_covs_ ? source_covs_->size() : 0)
             << " input_size=" << (input_ ? input_->size() : -1) << std::endl;
-  */
-  if (source_covs_ == nullptr || source_covs_->size() != input_->size()) {
+  std::cout << "COMPUTE" << std::endl;
+  
+  
+
+  if (source_covs_ == nullptr || source_covs_->size() != input_->size()) {    // Never called
+    std::cout << "COMPUTE: CSC" << std::endl;
     calculateSourceCovariances();
     //retrieveSourceCovariancesFromROSMsg();
   }
@@ -393,11 +407,13 @@ void NanoGICP<PointSource, PointTarget>::computeTransformation(PointCloudSource&
             << " size=" << (target_covs_ ? target_covs_->size() : 0)
             << " target_size=" << (target_ ? target_->size() : -1) << std::endl;
   */
-  if (target_covs_ == nullptr || target_covs_->size() != target_->size()) {
+  if (target_covs_ == nullptr || target_covs_->size() != target_->size()) {   // Never called
+    std::cout << "COMPUTE: CTC" << std::endl;
     calculateTargetCovariances();
     //retrieveSourceCovariancesFromROSMsg();
   }
-
+  std::cerr << "\n=== BT: NanoGICP::computeTransformation ===\n";
+  print_bt();
   LsqRegistration<PointSource, PointTarget>::computeTransformation(output, guess);
 }
 

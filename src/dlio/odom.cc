@@ -189,7 +189,7 @@ void dlio::OdomNode::getParams() {
   dlio::declare_param(this, "frames/imu", this->imu_frame, "imu");
 
   // Deskew Flag
-  dlio::declare_param(this, "pointcloud/deskew", this->deskew_, true);
+  dlio::declare_param(this, "pointcloud/deskew", this->deskew_, true);   // Deskewing Flag
 
   // Gravity
   dlio::declare_param(this, "odom/gravity", this->gravity_, 9.80665);
@@ -655,8 +655,8 @@ void dlio::OdomNode::preprocessPoints() {
   }
 
   // -- Voxel Grid Filter --
-  bool force_no_vf   = false;
-  bool use_custom_vf = true;
+  bool force_no_vf   = false; // force
+  bool use_custom_vf = true;  // force
 
   if (this->vf_use_ && !force_no_vf) {
     if (use_custom_vf) {
@@ -677,7 +677,7 @@ void dlio::OdomNode::preprocessPoints() {
 
     } else {
       printf("Using PCL Voxel Grid Filter (centroid averaging)\n");
-      
+
       pcl::PointCloud<PointType>::Ptr current_scan_ =
           std::make_shared<pcl::PointCloud<PointType>>(*this->deskewed_scan);
       this->voxel.setInputCloud(current_scan_);
@@ -829,18 +829,76 @@ void dlio::OdomNode::deskewPointcloud() {
   // update prior to be the estimated pose at the median time of the scan (corresponds to this->scan_stamp)
   this->T_prior = frames[median_pt_index];
 
+  /*
 #pragma omp parallel for num_threads(this->num_threads_)
   for (int i = 0; i < timestamps.size(); i++) {
 
     Eigen::Matrix4f T = frames[i] * this->extrinsics.baselink2lidar_T;
+    Eigen::Matrix3f R = T.block<3,3>(0,0);
 
     // transform point to world frame
     for (int k = unique_time_indices[i]; k < unique_time_indices[i+1]; k++) {
       auto &pt = deskewed_scan_->points[k];
       pt.getVector4fMap()[3] = 1.;
       pt.getVector4fMap() = T * pt.getVector4fMap();
+
+      // Normale transformieren (nur Rotation!)
+      
+      Eigen::Vector3f n(pt.normal_x, pt.normal_y, pt.normal_z);
+      n = R * n;
+      n.normalize(); // sicherstellen, dass es wieder Einheitsvektor ist
+      pt.normal_x = n.x();
+      pt.normal_y = n.y();
+      pt.normal_z = n.z();
+    }
+  }*/
+
+  #pragma omp parallel for num_threads(this->num_threads_)
+  for (int i = 0; i < timestamps.size(); i++) {
+
+    Eigen::Matrix4f T = frames[i] * this->extrinsics.baselink2lidar_T;
+    Eigen::Matrix3f R = T.block<3,3>(0,0);
+    //std::cout << "  R =\n" << R << "\n";  //rotation matrix
+
+    for (int k = unique_time_indices[i]; k < unique_time_indices[i+1]; k++) {
+      auto &pt = deskewed_scan_->points[k];
+
+      // Punkt transformieren
+      pt.getVector4fMap()[3] = 1.f;
+      pt.getVector4fMap() = T * pt.getVector4fMap();
+
+      // Normale vorher
+      Eigen::Vector3f n_before(pt.normal_x, pt.normal_y, pt.normal_z);
+
+      // Normale transformieren (nur Rotation)
+      Eigen::Vector3f n_after = R * n_before;
+      n_after.normalize();
+
+      // Update points Point-Struct   // Implement: only if normals are present!
+      pt.normal_x = n_after.x();
+      pt.normal_y = n_after.y();
+      pt.normal_z = n_after.z();
+
+      // Debug-Ausgabe
+      bool PrintNormals = false;
+      if (PrintNormals && i<=5) {
+        #pragma omp critical
+        {
+          std::cout << "[Normals] Point index " << k << "\n";
+          std::cout << "  before = [" 
+                    << n_before.x() << ", " 
+                    << n_before.y() << ", " 
+                    << n_before.z() << "]\n";
+          std::cout << "  after  = [" 
+                    << pt.normal_x << ", " 
+                    << pt.normal_y << ", " 
+                    << pt.normal_z << "]\n";
+          std::cout << "  R =\n" << R << "\n";
+        }
+      }
     }
   }
+
 
   this->deskewed_scan = deskewed_scan_;
   this->deskew_status = true;
@@ -861,8 +919,8 @@ void dlio::OdomNode::initializeInputTarget() {
 
 void dlio::OdomNode::setInputSource() {
   this->gicp.setInputSource(this->current_scan);    // Only use retrieved() if cloud has normals --> If/Else logic
-  //this->gicp.calculateSourceCovariances();          // Overwrite with own function (.cc)
-  this->gicp.retrieveSourceCovariancesFromROSMsg(); // If the RosBag has not  normals saved, fallback to standard GICP is implemented
+  this->gicp.calculateSourceCovariances();          // Overwrite with own function (.cc)
+  //this->gicp.retrieveSourceCovariancesFromROSMsg(); // If the RosBag has not  normals saved, fallback to standard GICP is implemented
 }
 
 void dlio::OdomNode::initializeDLIO() {

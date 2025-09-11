@@ -111,7 +111,7 @@ void LsqRegistration<PointTarget, PointSource>::computeTransformation(PointCloud
   lm_lambda_ = -1.0;
   converged_ = false;
 
-  if (lm_debug_print_) {
+  if (!lm_debug_print_) {   // Print header
     std::cout << "********************************************" << std::endl;
     std::cout << "***************** optimize *****************" << std::endl;
     std::cout << "********************************************" << std::endl;
@@ -148,7 +148,7 @@ bool LsqRegistration<PointTarget, PointSource>::is_converged(const Eigen::Isomet
 template <typename PointTarget, typename PointSource>
 bool LsqRegistration<PointTarget, PointSource>::step_optimize(Eigen::Isometry3d& x0, Eigen::Isometry3d& delta) {
   switch (lsq_optimizer_type_) {
-    case LSQ_OPTIMIZER_TYPE::LevenbergMarquardt:
+    case LSQ_OPTIMIZER_TYPE::LevenbergMarquardt:  //Standard
       return step_lm(x0, delta);
     case LSQ_OPTIMIZER_TYPE::GaussNewton:
       return step_gn(x0, delta);
@@ -159,6 +159,7 @@ bool LsqRegistration<PointTarget, PointSource>::step_optimize(Eigen::Isometry3d&
 
 template <typename PointTarget, typename PointSource>
 bool LsqRegistration<PointTarget, PointSource>::step_gn(Eigen::Isometry3d& x0, Eigen::Isometry3d& delta) {
+  std::cout << "GN step" << std::endl;
   Eigen::Matrix<double, 6, 6> H;
   Eigen::Matrix<double, 6, 1> b;
   double y0 = linearize(x0, &H, &b);
@@ -179,6 +180,7 @@ bool LsqRegistration<PointTarget, PointSource>::step_gn(Eigen::Isometry3d& x0, E
 
 template <typename PointTarget, typename PointSource>
 bool LsqRegistration<PointTarget, PointSource>::step_lm(Eigen::Isometry3d& x0, Eigen::Isometry3d& delta) {
+  std::cout << "LM step" << std::endl;
   Eigen::Matrix<double, 6, 6> H;
   Eigen::Matrix<double, 6, 1> b;
   double y0 = linearize(x0, &H, &b);
