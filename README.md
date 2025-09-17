@@ -153,6 +153,7 @@ source /opt/ros/humble/setup.bash
 source ~/dlio_ws/install/setup.bash
 ```
 ```
+# trm_1-source
 cd /home/thor_unix_2204/dlio_ws
 source ~/dlio_venv_310/bin/activate
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
@@ -164,7 +165,7 @@ source ~/dlio_ws/install/setup.bash
 ros2 launch direct_lidar_inertial_odometry dlio.launch.py   rviz:=true   pointcloud_topic:=/robot/lidar   imu_topic:=/robot/imu #REPLACE TOPICS
 ```
 ```
-# Original quadhard and Lisu (not Lisu-Dfliom)
+# trm_1 launch - Original quadhard and Lisu (not Lisu-Dfliom)
 ros2 launch direct\_lidar\_inertial\_odometry dlio.launch.py   rviz:=true   pointcloud\_topic:=/os\_cloud\_node/points   imu\_topic:=/os\_cloud\_node/imu
 ```
 ```
@@ -180,6 +181,7 @@ source /opt/ros/humble/setup.bash
 source ~/dlio_ws/install/setup.bash
 ```
 ```
+# trm_2 source
 source ~/dlio_venv_310/bin/activate
 source /opt/ros/humble/setup.bash
 source ~/dlio_ws/install/setup.bash
@@ -197,7 +199,7 @@ ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/in
 ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard_full/quadhard_dfliom_V24.db3
 ```
 ```
-# LiSu quadhard
+# trm_2 play - LiSu quadhard
 ros2 bag play /home/thor_unix_2204/lisu_ws/src/LiSu/input_data/dataset_quadhard/output_lisu/quadhard_LiSu_V1
 ```
 

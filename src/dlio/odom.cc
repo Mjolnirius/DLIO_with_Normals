@@ -912,15 +912,18 @@ void dlio::OdomNode::initializeInputTarget() {
   // keep history of keyframes
   this->keyframes.push_back(std::make_pair(std::make_pair(this->lidarPose.p, this->lidarPose.q), this->current_scan));
   this->keyframe_timestamps.push_back(this->scan_header_stamp);
-  this->keyframe_normals.push_back(this->gicp.getSourceCovariances());
+  this->keyframe_normals.push_back(this->gicp.getSourceCovariances());    // might be useful
   this->keyframe_transformations.push_back(this->T_corr);
 
 }
 
 void dlio::OdomNode::setInputSource() {
-  this->gicp.setInputSource(this->current_scan);    // Only use retrieved() if cloud has normals --> If/Else logic
-  this->gicp.calculateSourceCovariances();          // Overwrite with own function (.cc)
-  //this->gicp.retrieveSourceCovariancesFromROSMsg(); // If the RosBag has not  normals saved, fallback to standard GICP is implemented
+  scan_nr_++;
+  std::cout << "[odom.cc] Scan-Timestamp: " << this->scan_stamp << std::endl;
+  //std::cout << "Processing ScanNr: "  << scan_nr_ << std::endl; // works thread-safe
+  this->gicp.setInputSource(this->current_scan);            // Only use retrieved() if cloud has normals --> If/Else logic
+  //this->gicp.calculateSourceCovariances();                // Overwrite with own function (.cc)
+  this->gicp.retrieveSourceCovariancesFromROSMsg(scan_nr_, this->scan_stamp); // If the RosBag has not  normals saved, fallback to standard GICP is implemented
 }
 
 void dlio::OdomNode::initializeDLIO() {

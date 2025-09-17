@@ -142,6 +142,10 @@ private:
   std::atomic<bool> deskew_status;
   std::atomic<int> deskew_size;
 
+  // Counters
+  std::atomic<int> scan_nr_{0};
+
+
   // Threads
   std::thread publish_thread;
   std::thread publish_keyframe_thread;

@@ -48,6 +48,14 @@
 #include <typeinfo>
 #include <pcl/point_traits.h>   // pcl::traits::has_field
 
+// For debug covariance dump
+#include <fstream>
+#include <iomanip>
+#include <filesystem>
+#include <atomic>
+
+
+
 #include <execinfo.h>
 static inline void print_bt() {
   void* buf[64];
@@ -188,8 +196,10 @@ void NanoGICP<PointSource, PointTarget>::setTargetCovariances(const std::shared_
 // retrieveSourceCovariancesFromROSMsg
 // ------------------------------------------------------------
 template <typename PointSource, typename PointTarget>
-bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg() {
+bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg(int scan_nr, double scan_stamp_sec) {
   std::cout << "[NanoGICP] retrieveSourceCovariancesFromROSMsg() called!" << std::endl;
+  std::cout << "[NanoGICP] scan_nr: " << scan_nr << std::endl;
+  std::cout << "[NanoGICP] Scan-Timestamp: " << scan_stamp_sec << std::endl;
 
   if (!input_) {
     std::cerr << "[NanoGICP] input_ is null\n";
@@ -209,6 +219,149 @@ bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg() {
       pcl::traits::has_field<T, pcl::fields::normal_y>::value &&
       pcl::traits::has_field<T, pcl::fields::normal_z>::value;
 
+//  bool SaveCovForInspection = true;
+//  if (SaveCovForInspection && (ScanNr==100)){
+//    calculateCovariancesFromLiSuNormals();
+//    // save covariances in a file to .../SavedCovariances/lisuCovs.???
+//
+//    calculateSourceCovariances();
+//    // save covariances in a file to .../SavedCovariances/dlioCovs.???
+//
+//    // also save this current scan/pointCloud to .../SavedCovariances/pointcloudNr100
+//  }
+
+  bool force_standard_covariance_calculation_ = false; // for testing
+
+  if (has_normals && !force_standard_covariance_calculation_) {
+
+    // Debug: only save covariances for a specific scan timestamp
+    double timetarget = 1625135734.74;
+    this->debug_save_covariances_ = (std::fabs(scan_stamp_sec - 1625135734.74) < 1e-3); // only save covariances for scan w timestamp 1625135734.74
+    std::cout << "[NanoGICP] difftotimetarget = " << std::fabs(scan_stamp_sec - 1625135734.74) << std::endl;
+    if (this->debug_save_covariances_) {
+      calculateSourceCovariances();   // attention: prior Covs have been calcd using Lisu normals!
+    }
+
+    return calculateCovariancesFromLiSuNormals();
+
+  } else {
+    // Fallback: standard GICP covariance calculation
+    std::cerr << "[NanoGICP] No normals in PointType / or Standard way was forced → using calculateSourceCovariances()" << std::endl;
+    return calculateSourceCovariances();
+  }
+}
+
+/*
+// ------------------------------------------------------------
+// retrieveSourceCovariancesFromROSMsg
+// ------------------------------------------------------------
+template <typename PointSource, typename PointTarget>
+bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg() {
+  std::cout << "[NanoGICP] retrieveSourceCovariancesFromROSMsg() called!" << std::endl;
+
+  if (!input_) {
+    std::cerr << "[NanoGICP] input_ is null\n";
+    return false;
+  }
+
+  // --- optional one-time debug dump ---
+  bool debug_normals_ = true;
+  if (debug_normals_) {
+    debugDumpSourceCloudOnce_();
+  }
+
+  using T = PointSource;
+  constexpr bool has_normals =
+      pcl::traits::has_field<T, pcl::fields::normal_x>::value &&
+      pcl::traits::has_field<T, pcl::fields::normal_y>::value &&
+      pcl::traits::has_field<T, pcl::fields::normal_z>::value;
+
+  // --- helper lambdas for saving ---
+  auto ensure_dir = [](const std::string& dir) {
+#if __cplusplus >= 201703L
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) {
+      std::cerr << "[NanoGICP] WARN: create_directories(" << dir << ") failed: " << ec.message() << "\n";
+    }
+#else
+    (void)dir; // no-op if filesystem not available
+#endif
+  };
+
+  auto save_covariances_csv = [](const CovarianceList& covs, const std::string& path) {
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) {
+      std::cerr << "[NanoGICP] ERROR: cannot open " << path << " for writing\n";
+      return false;
+    }
+    ofs.setf(std::ios::fixed); ofs.precision(17);
+    for (const auto& Q : covs) {
+      // store only the 3x3 spatial block (row-major, 9 values)
+      Eigen::Matrix3d C = Q.block<3,3>(0,0);
+      ofs << C(0,0) << "," << C(0,1) << "," << C(0,2) << ","
+          << C(1,0) << "," << C(1,1) << "," << C(1,2) << ","
+          << C(2,0) << "," << C(2,1) << "," << C(2,2) << "\n";
+    }
+    return true;
+  };
+
+  auto save_source_cloud_pcd = [this](const typename pcl::PointCloud<PointSource>::ConstPtr& cloud,
+                                      const std::string& path) {
+    if (!cloud) {
+      std::cerr << "[NanoGICP] ERROR: no cloud to save\n";
+      return false;
+    }
+    if (pcl::io::savePCDFileASCII(path, *cloud) != 0) {
+      std::cerr << "[NanoGICP] ERROR: savePCDFileASCII(" << path << ") failed\n";
+      return false;
+    }
+    return true;
+  };
+
+  // --- Save artifacts for inspection on a specific scan ---
+  bool SaveCovForInspection = true;
+  if (SaveCovForInspection && (ScanNr == 100)) {
+    const std::string base_dir = "SavedCovariances";
+    ensure_dir(base_dir);
+
+    // 1) LiSu-based covariances
+    std::shared_ptr<CovarianceList> backup_covs = source_covs_; // keep whatever was there
+    float backup_density = source_density_;
+
+    std::cout << "[NanoGICP] [Save] Computing LiSu covariances for inspection...\n";
+    if (!calculateCovariancesFromLiSuNormals()) {
+      std::cerr << "[NanoGICP] ERROR: calculateCovariancesFromLiSuNormals() failed; skipping save.\n";
+    } else if (source_covs_) {
+      const std::string lisu_path = base_dir + "/lisuCovs_scan" + std::to_string(ScanNr) + ".csv";
+      save_covariances_csv(*source_covs_, lisu_path);
+      std::cout << "[NanoGICP] [Save] LiSu covariances -> " << lisu_path << "\n";
+    }
+
+    // 2) Standard GICP covariances
+    std::cout << "[NanoGICP] [Save] Computing STANDARD covariances for inspection...\n";
+    if (!calculateSourceCovariances()) {
+      std::cerr << "[NanoGICP] ERROR: calculateSourceCovariances() failed; skipping save.\n";
+    } else if (source_covs_) {
+      const std::string dlio_path = base_dir + "/dlioCovs_scan" + std::to_string(ScanNr) + ".csv";
+      save_covariances_csv(*source_covs_, dlio_path);
+      std::cout << "[NanoGICP] [Save] Standard (DLIO) covariances -> " << dlio_path << "\n";
+    }
+
+    // 3) Save the current source cloud (as seen by NanoGICP)
+    const std::string cloud_path = base_dir + "/pointcloud_scan" + std::to_string(ScanNr) + ".pcd";
+    if (save_source_cloud_pcd(input_, cloud_path)) {
+      std::cout << "[NanoGICP] [Save] Source point cloud -> " << cloud_path << "\n";
+    }
+
+    // Important: do not leave STANDARD covariances in place just because we saved them.
+    // Restore previous covs; the actual choice for the run is made below.
+    source_covs_ = backup_covs;
+    source_density_ = backup_density;
+  }
+
+  // --- control flags for runtime ---
   bool force_standard_covariance_calculation_ = false; // for testing
 
   if (has_normals && !force_standard_covariance_calculation_) {
@@ -218,6 +371,29 @@ bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg() {
     std::cerr << "[NanoGICP] No normals in PointType / or Standard way was forced → using calculateSourceCovariances()" << std::endl;
     return calculateSourceCovariances();
   }
+}
+*/
+
+// writeCovariancesCSV
+template <typename PointSource, typename PointTarget>
+bool NanoGICP<PointSource, PointTarget>::writeCovariancesCSV(
+    const CovarianceList& covs, const std::string& filepath) const {
+  std::ofstream ofs(filepath);
+  if (!ofs) return false;
+  ofs << "index,"
+         "q00,q01,q02,q03,"
+         "q10,q11,q12,q13,"
+         "q20,q21,q22,q23,"
+         "q30,q31,q32,q33\n";
+  for (size_t i = 0; i < covs.size(); ++i) {
+    const Eigen::Matrix4d& Q = covs[i];
+    ofs << i;
+    for (int r = 0; r < 4; ++r)
+      for (int c = 0; c < 4; ++c)
+        ofs << ',' << Q(r, c);
+    ofs << '\n';
+  }
+  return true;
 }
 
 
@@ -240,8 +416,8 @@ bool NanoGICP<PointSource, PointTarget>::calculateCovariancesFromLiSuNormals() {
   // ---- Parameter (update later - tuning) ----
   const double s   = 0.05;    // charakteristischer Längenscale [m], z.B. Voxelgröße
   const double r   = 0.15;    // Anisotropie: sigma_n / sigma_t  (normal schmaler)
-  const double st2 = 1;       //s * s;
-  const double sn2 = 1e3;     //(r * s) * (r * s);
+  const double st2 = s*s;       //s * s; 1;
+  const double sn2 = (r * s) * (r * s);     //(r * s) * (r * s); 1e3;
   const double eps = 1e-8;    //  Regularisierung für Invertierbarkeit
 
   const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
@@ -268,20 +444,61 @@ bool NanoGICP<PointSource, PointTarget>::calculateCovariancesFromLiSuNormals() {
     const Eigen::Matrix3d Ppar  = n * n.transpose();   // n n^T
     const Eigen::Matrix3d Pperp = I - Ppar;            // I - n n^T
 
-    // Σ = σ_t^2 P_perp + σ_n^2 P_par  (+ eps*I)
-    Eigen::Matrix3d Sigma = st2 * Pperp + sn2 * Ppar;
+    // --- Normalisierung in DLIO-Skala ---
+    // Ursprüngliche Skalen:
+    //const double st2 = s * s;                // tangential variance
+    //const double sn2 = (r * s) * (r * s);    // normal variance
+
+    // Verhältnis normal/tangential:
+    double alpha = sn2 / st2;
+    // Untere Schranke wie DLIO-PLANE:
+    alpha = std::max(alpha, 1e-3);
+
+    // Jetzt normierte Sigma (tangential ≈ 1, normal ≈ alpha)
+    Eigen::Matrix3d Sigma = Pperp + alpha * Ppar;
+
+    // Optional: globales Finetuning (z.B. auf 0.9 mitteln):
+    // double k = 1.0; // oder 0.9;
+    // Sigma *= k;
+
+    // leichte Regularisierung für Invertierbarkeit
     Sigma.diagonal().array() += eps;
 
     // 3×3 → 4×4 einbetten
     Eigen::Matrix4d Q = Eigen::Matrix4d::Zero();
     Q.block<3,3>(0,0) = Sigma;
-    Q(3,3) = 1.0; // in update_correspondences() wird (3,3) vor der Inversion auf 1 gesetzt und danach auf 0
+    // Für Vergleich mit DLIO-CSV auf 0 lassen (DLIO hat hier 0):
+    Q(3,3) = 0.0;
 
     (*covs)[i] = Q;
+
   }
 
   source_covs_    = covs;
   source_density_ = 0.f; // optional
+
+  // ----- DEBUG: Write covariances to file -----
+  if (this->debug_save_covariances_) {
+    namespace fs = std::filesystem;
+    try {
+      fs::create_directories(this->debug_cov_dir_);
+
+      const uint64_t seq = this->debug_cov_seq_.fetch_add(1) + 1;  // 1-based
+      std::ostringstream oss;
+      oss << this->debug_cov_dir_ << "/covariances_lisu_"
+          << std::setw(6) << std::setfill('0') << seq << ".csv";
+
+      if (this->writeCovariancesCSV(*covs, oss.str())) {
+        std::cout << "[NanoGICP] Wrote covariance dump to: " << oss.str()
+                  << " (" << covs->size() << " entries)\n";
+      } else {
+        std::cerr << "[NanoGICP] Failed to write covariance dump to: " << oss.str() << "\n";
+      }
+    } catch (const std::exception& e) {
+      std::cerr << "[NanoGICP] Error saving covariances: " << e.what() << "\n";
+    }
+  }
+  // ----- DEBUG: Write covariances to file -----
 
   return true;
 }
@@ -413,7 +630,7 @@ void NanoGICP<PointSource, PointTarget>::computeTransformation(PointCloudSource&
     //retrieveSourceCovariancesFromROSMsg();
   }
   std::cerr << "\n=== BT: NanoGICP::computeTransformation ===\n";
-  print_bt();
+  //print_bt();
   LsqRegistration<PointSource, PointTarget>::computeTransformation(output, guess);
 }
 
@@ -602,6 +819,29 @@ bool NanoGICP<PointSource, PointTarget>::calculate_covariances(           // cal
   }
 
   density = sum_k_sq_distances / cloud->size();
+
+  // ----- DEBUG: Write covariances to file -----
+  if (this->debug_save_covariances_) {
+    namespace fs = std::filesystem;
+    try {
+      fs::create_directories(this->debug_cov_dir_);
+
+      const uint64_t seq = this->debug_cov_seq_.fetch_add(1) + 1;  // 1-based
+      std::ostringstream oss;
+      oss << this->debug_cov_dir_ << "/covariances_dlioSTD_"
+          << std::setw(6) << std::setfill('0') << seq << ".csv";
+
+      if (this->writeCovariancesCSV(covariances, oss.str())) {
+        std::cout << "[NanoGICP] Wrote STD covariance dump to: " << oss.str()
+                  << " (" << covariances.size() << " entries)\n";
+      } else {
+        std::cerr << "[NanoGICP] Failed to write covariance dump to: " << oss.str() << "\n";
+      }
+    } catch (const std::exception& e) {
+      std::cerr << "[NanoGICP] Error saving covariances: " << e.what() << "\n";
+    }
+  }
+  // ----- DEBUG: Write covariances to file -----
 
   return true;
 }

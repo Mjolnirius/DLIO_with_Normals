@@ -102,10 +102,19 @@ public:
   virtual void registerInputTarget(const PointCloudTargetConstPtr& cloud);
 
 
-  virtual bool retrieveSourceCovariancesFromROSMsg();     // retrieve source covariances from ROS message (if applicable)
+  virtual bool retrieveSourceCovariancesFromROSMsg(int scan_nr_, double scan_stamp_sec_);     // retrieve source covariances from ROS message (if applicable)
   void debugDumpSourceCloudOnce_();                       // debug dump of source cloud to PCD file (once)  
   bool calculateCovariancesFromLiSuNormals();
   
+  // ---- Debug: optional covariance dumping ----
+  bool debug_save_covariances_ = false;               // enable/disable CSV dump
+  //std::string debug_cov_dir_ = "~/dlio_ws/src/direct_lidar_inertial_odometry/src/nano_gicp/saved_covariances";  // output folder
+  std::string debug_cov_dir_ = "/home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/src/nano_gicp/saved_covariances";  // output folder
+  std::atomic<uint64_t> debug_cov_seq_{0};            // auto file numbering
+
+  bool writeCovariancesCSV(const CovarianceList& covs,
+                           const std::string& filepath) const;
+
   virtual bool calculateSourceCovariances();
   virtual bool calculateTargetCovariances();
 

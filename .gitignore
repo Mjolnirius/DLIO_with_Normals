@@ -1,3 +1,6 @@
-# alle .pcd Dateien ignorieren
+# alle Dateitypen ignorieren
 *.pcd
+*.csv
+
+# Ordner
 input_data/*
