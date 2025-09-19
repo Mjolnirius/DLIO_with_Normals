@@ -199,7 +199,7 @@ template <typename PointSource, typename PointTarget>
 bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg(int scan_nr, double scan_stamp_sec) {
   std::cout << "[NanoGICP] retrieveSourceCovariancesFromROSMsg() called!" << std::endl;
   std::cout << "[NanoGICP] scan_nr: " << scan_nr << std::endl;
-  std::cout << "[NanoGICP] Scan-Timestamp: " << scan_stamp_sec << std::endl;
+  //std::cout << "[NanoGICP] Scan-Timestamp: " << scan_stamp_sec << std::endl;
 
   if (!input_) {
     std::cerr << "[NanoGICP] input_ is null\n";
@@ -207,14 +207,14 @@ bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg(int
   }
 
   
-  bool debug_normals_ = true;
+  bool debug_normals_ = false;                            //Debug-Flag
   // DEBUGGING
   if (debug_normals_) {
     debugDumpSourceCloudOnce_();
   }
 
   using T = PointSource;
-  constexpr bool has_normals =
+  constexpr bool has_normals =                          // redo, always evaluates to true, since PointType has normal-fields
       pcl::traits::has_field<T, pcl::fields::normal_x>::value &&
       pcl::traits::has_field<T, pcl::fields::normal_y>::value &&
       pcl::traits::has_field<T, pcl::fields::normal_z>::value;
@@ -230,14 +230,15 @@ bool NanoGICP<PointSource, PointTarget>::retrieveSourceCovariancesFromROSMsg(int
 //    // also save this current scan/pointCloud to .../SavedCovariances/pointcloudNr100
 //  }
 
-  bool force_standard_covariance_calculation_ = false; // for testing
+  bool force_standard_covariance_calculation_ = true;    //Debug-Flag
 
   if (has_normals && !force_standard_covariance_calculation_) {
 
-    // Debug: only save covariances for a specific scan timestamp
+    // Debug: save covariances for a specific scan to compare lisu vs standard covCalc
+    bool debug_save_covariances_FLAG = false;             //Debug-Flag
     double timetarget = 1625135734.74;
-    this->debug_save_covariances_ = (std::fabs(scan_stamp_sec - 1625135734.74) < 1e-3); // only save covariances for scan w timestamp 1625135734.74
-    std::cout << "[NanoGICP] difftotimetarget = " << std::fabs(scan_stamp_sec - 1625135734.74) << std::endl;
+    this->debug_save_covariances_ = (debug_save_covariances_FLAG) && (std::fabs(scan_stamp_sec - 1625135734.74) < 1e-3); // only save covariances for scan w timestamp 1625135734.74
+    if (debug_save_covariances_FLAG) {std::cout << "[NanoGICP] difftotimetarget = " << std::fabs(scan_stamp_sec - 1625135734.74) << std::endl;}
     if (this->debug_save_covariances_) {
       calculateSourceCovariances();   // attention: prior Covs have been calcd using Lisu normals!
     }
@@ -611,7 +612,7 @@ void NanoGICP<PointSource, PointTarget>::computeTransformation(PointCloudSource&
   std::cout << "[NanoGICP] source_covs_ ptr=" << (void*)source_covs_.get()
             << " size=" << (source_covs_ ? source_covs_->size() : 0)
             << " input_size=" << (input_ ? input_->size() : -1) << std::endl;
-  std::cout << "COMPUTE" << std::endl;
+  //std::cout << "COMPUTE" << std::endl;
   
   
 

@@ -142,6 +142,7 @@ This work is licensed under the terms of the MIT license.
 Quickbuild:
 ```
 colcon build --packages-select direct_lidar_inertial_odometry
+# check if normal-use is set to true/false
 ```
 Terminal 1 (Replace topics according to RosBag):
 ```
@@ -192,7 +193,7 @@ ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/in
 ```
 ```
 # Original quadhard
-ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard_full
+ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard/quadhard_db3_bag --clock
 ```
 ```
 # DFLIOM quadhard
@@ -200,21 +201,28 @@ ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/in
 ```
 ```
 # trm_2 play - LiSu quadhard
-ros2 bag play /home/thor_unix_2204/lisu_ws/src/LiSu/input_data/dataset_quadhard/output_lisu/quadhard_LiSu_V1
+ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard/quadhard_LiSu_V1
 ```
 
 \
 Extract Trajectory:
 ```
+0. Adapt resulting file path and name
+
+1. T1: build -> source -> ros launch
+2. T2: source -> (wait for T3 record) -> ros2 bag play ... --clock
+3. T3: source -> record -> (T2: ros2 bag play)
+4. Let ros2 bag play finish
+5. T3: CTRL+C => .tum saved
 ```
 
 ```
+# trm_3 - dlio record
 cd /home/thor_unix_2204/dlio_ws
 source ~/dlio_venv_310/bin/activate
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 source /opt/ros/humble/setup.bash
 source ~/dlio_ws/install/setup.bash
-
 cd ~/dlio_ws/scripts
 
 python record_pose_to_tum.py
@@ -223,6 +231,63 @@ python record_pose_to_tum.py
 ```
 # Original quadhard
 ros2 bag play /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard_full --clock
+```
+\
+Evaluate Trajectory:
+```
+# works
+evo_ape tum \
+  /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/ground_truth_data/qh_gt_converted.tum \
+  /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/output_data/r1_quadhard_lisu.tum \
+  -va --plot --save_results results.zip
+```
+```
+# template
+evo_ape tum \
+  <ground-truth.tum> \
+  <dlio-result.tum> \
+  -va --plot --save_results results.zip
+```
+
+```
+# editing
+evo_ape tum \
+  /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadhard/qh_gt_converted.tum \
+  /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/output_data/r1_quadhard_lisu/r1_quadhard_lisu_V2.tum \
+  -va --plot --save_results results.zip
+```
+
+\
+Convert csv ground truth to .tum format:
+```
+1. in convert_gt_to_tum.py: change input_path
+
+cd /home/thor_unix_2204/dlio_ws
+source ~/dlio_venv/bin/activate
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+cd /home/thor_unix_2204/dlio_ws/scripts
+
+python convert_gt_csv_to_tum.py
+```
+
+\
+Convert Ros1->Ros2 db3 bag:
+
+```
+1. Download file and move it to WSL: ((base) thor_unix_2204@ThorTower:/mnt/c/Users/thoel/gitreps/DATA_Gitreps/ST_2025_RUGDLIO/quadeasy$ mv 2021-07-01-10-37-38-quad-easy.bag /home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadeasy)
+
+cd /home/thor_unix_2204/dlio_ws
+source ~/dlio_venv/bin/activate
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+source /opt/ros/humble/setup.bash
+source ~/dlio_ws/install/setup.bash
+
+/home/thor_unix_2204/dlio_ws/src/direct_lidar_inertial_odometry/input_data/dataset_quadeasy
+
+rosbags-convert --src 2021-07-01-10-37-38-quad-easy.bag --dst quadeasy_db3_bag
+
 ```
 \
 Other ROS commands:
